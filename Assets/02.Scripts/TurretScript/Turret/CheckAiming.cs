@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class CheckAiming : MonoBehaviour
@@ -10,6 +11,10 @@ public class CheckAiming : MonoBehaviour
 
     [Header("Aim Margin")]
     [SerializeField] private float fireAngleThreshold = 5f;
+
+    public float FireAngleThreshold => fireAngleThreshold;
+
+    public event Action<float> OnFireAngleThresholdChanged;
 
     [Header("Debug")]
     [SerializeField] private float signedYawAngle;
@@ -108,5 +113,27 @@ public class CheckAiming : MonoBehaviour
         {
             canFire = false;
         }
+    }
+
+    public void SetTarget(Transform newTarget)
+    {
+        // 변경점:
+        // newTarget이 null이어도 target에 대입할 수 있게 했습니다.
+        // 이유:
+        // 타겟을 잃었을 때 기존 타겟을 비워야 터렛이 더 이상 이전 타겟을 추적하지 않습니다.
+        if (target == newTarget)
+            return;
+
+        target = newTarget;
+    }
+
+    public void SetFireAngleThreshold(float newFireAngleThreshold)
+    {
+        if (fireAngleThreshold == newFireAngleThreshold)
+            return;
+
+        fireAngleThreshold = newFireAngleThreshold;
+
+        OnFireAngleThresholdChanged?.Invoke(fireAngleThreshold);
     }
 }

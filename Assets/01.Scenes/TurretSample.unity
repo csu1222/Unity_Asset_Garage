@@ -131,7 +131,6 @@ GameObject:
   - component: {fileID: 325335665}
   - component: {fileID: 325335664}
   - component: {fileID: 325335663}
-  - component: {fileID: 325335666}
   m_Layer: 0
   m_Name: Barrel
   m_TagString: Untagged
@@ -233,24 +232,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 325335661}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!114 &325335666
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 325335661}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5bf97508ff89c134d9a4d9d73d5054ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CheckAiming
-  target: {fileID: 1709261439}
-  muzzle: {fileID: 2123404438}
-  fireAngleThreshold: 5
-  signedYawAngle: 0
-  signedPitchAngle: 0
-  canFire: 0
 --- !u!1 &842279675
 GameObject:
   m_ObjectHideFlags: 0
@@ -260,7 +241,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 842279676}
-  - component: {fileID: 842279677}
   m_Layer: 0
   m_Name: YawPivot
   m_TagString: Untagged
@@ -284,23 +264,6 @@ Transform:
   - {fileID: 1098261258}
   m_Father: {fileID: 2072477538}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &842279677
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 842279675}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6e7992269d3ffe34aa53398dc6cbfb93, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RotateTarget
-  target: {fileID: 1709261439}
-  speed: 60
-  stopAngle: 1
-  rotationDirection: {x: 0, y: 0, z: 0}
-  signedYawAngle: 0
 --- !u!1 &1098261257
 GameObject:
   m_ObjectHideFlags: 0
@@ -313,7 +276,6 @@ GameObject:
   - component: {fileID: 1098261261}
   - component: {fileID: 1098261260}
   - component: {fileID: 1098261259}
-  - component: {fileID: 1098261262}
   m_Layer: 0
   m_Name: TurretHead
   m_TagString: Untagged
@@ -415,27 +377,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1098261257}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!114 &1098261262
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1098261257}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e758ebff10f5b2b458b5a3aef403649f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MissileLaunch
-  muzzle: {fileID: 2123404438}
-  checkAiming: {fileID: 325335666}
-  projectileShape: 0
-  projectileScale: 0.3
-  projectileSpeed: 12
-  fireInterval: 0.5
-  projectileLifeTime: 3
-  canLaunch: 0
-  nextFireTime: 0
 --- !u!1 &1146881114
 GameObject:
   m_ObjectHideFlags: 0
@@ -604,7 +545,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1305352589}
-  - component: {fileID: 1305352590}
   m_Layer: 0
   m_Name: PitchPivot
   m_TagString: Untagged
@@ -628,26 +568,6 @@ Transform:
   - {fileID: 325335662}
   m_Father: {fileID: 1098261258}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1305352590
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1305352588}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 77540627e7d22e04d846df1342ea9f11, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RotateTargetPitch
-  target: {fileID: 1709261439}
-  minPitch: -45
-  maxPitch: 30
-  speed: 30
-  stopAngle: 1
-  rotationDirection: {x: 0, y: 0, z: 0}
-  signedPitchAngle: 0
-  currentPitch: 0
 --- !u!1 &1370591849
 GameObject:
   m_ObjectHideFlags: 0
@@ -770,6 +690,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1407954717}
+  - component: {fileID: 1407954718}
+  - component: {fileID: 1407954719}
+  - component: {fileID: 1407954721}
+  - component: {fileID: 1407954720}
+  - component: {fileID: 1407954722}
   m_Layer: 0
   m_Name: Turret
   m_TagString: Untagged
@@ -793,6 +718,118 @@ Transform:
   - {fileID: 2072477538}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1407954718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0c8c587f7b2f0041b430030f9967097, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TurretManager
+  turretHeadYawPivot: {fileID: 1407954719}
+  turretBarrelPitchPivot: {fileID: 1407954721}
+  turretHead: {fileID: 1407954720}
+  aimChecker: {fileID: 1407954722}
+  yawSpeed: 180
+  yawStopAngle: 1
+  minPitch: -45
+  maxPitch: 30
+  pitchSpeed: 45
+  pitchStopAngle: 1
+  projectileSpeed: 12
+  fireInterval: 0.5
+  projectileLifeTime: 3
+  fireAngleThreshold: 5
+  selectionPolicy: 0
+  selfTeamId: -1
+  targetSearchRange: 15
+  targetRefreshInterval: 0.1
+--- !u!114 &1407954719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6e7992269d3ffe34aa53398dc6cbfb93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RotateTargetYaw
+  yawPivot: {fileID: 842279676}
+  target: {fileID: 1709261439}
+  yawSpeed: 180
+  yawStopAngle: 1
+  rotationDirection: {x: 0, y: 0, z: 0}
+  signedYawAngle: 0
+--- !u!114 &1407954720
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e758ebff10f5b2b458b5a3aef403649f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MissileLaunch
+  muzzle: {fileID: 2123404438}
+  checkAiming: {fileID: 1407954722}
+  missilePrefab: {fileID: 359052364241322406, guid: ef142042c8eabb547b4db235d8a35c03, type: 3}
+  projectileShape: 0
+  projectileScale: 0.3
+  usePrefab: 1
+  projectileSpeed: 12
+  fireInterval: 0.5
+  projectileLifeTime: 3
+  projectileDamage: 10
+  shooterTeamId: 0
+  canLaunch: 0
+  nextFireTime: 0
+--- !u!114 &1407954721
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77540627e7d22e04d846df1342ea9f11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RotateTargetPitch
+  pitchPivot: {fileID: 1305352589}
+  target: {fileID: 1709261439}
+  minPitch: -45
+  maxPitch: 30
+  pitchSpeed: 45
+  pitchStopAngle: 1
+  rotationDirection: {x: 0, y: 0, z: 0}
+  signedPitchAngle: 0
+  currentPitch: 0
+--- !u!114 &1407954722
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bf97508ff89c134d9a4d9d73d5054ca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CheckAiming
+  target: {fileID: 1709261439}
+  muzzle: {fileID: 2123404438}
+  fireAngleThreshold: 5
+  signedYawAngle: 0
+  signedPitchAngle: 0
+  canFire: 0
 --- !u!1 &1709261435
 GameObject:
   m_ObjectHideFlags: 0
@@ -806,8 +843,9 @@ GameObject:
   - component: {fileID: 1709261437}
   - component: {fileID: 1709261436}
   - component: {fileID: 1709261440}
+  - component: {fileID: 1709261441}
   m_Layer: 0
-  m_Name: TargetDron
+  m_Name: EnemySpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -900,7 +938,7 @@ Transform:
   m_GameObject: {fileID: 1709261435}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 6, y: 1.5, z: 0}
+  m_LocalPosition: {x: 10, y: 2, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -920,6 +958,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RotateAround
   center: {fileID: 1146881115}
   speed: 30
+--- !u!114 &1709261441
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1709261435}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b67dec81de6e65e42a332450138090c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySpawner
+  enemyPrefab: {fileID: 4709950448012325657, guid: 43cc7e491f42c3042a1323b2530aedbe, type: 3}
+  enemyRoot: {fileID: 1709261439}
+  defaultCapacity: 10
+  maxSize: 50
+  initialSpawnCount: 4
+  maxAliveCount: 8
+  spawnIntervalSeconds: 1
+  lookAtCenter: {fileID: 1098261258}
+  enemyMoveSpeedUnitsPerSecond: 5
+  enemyLifeTimeSeconds: 10
 --- !u!1 &1788323718
 GameObject:
   m_ObjectHideFlags: 0
