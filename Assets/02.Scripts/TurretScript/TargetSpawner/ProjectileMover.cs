@@ -25,10 +25,8 @@ public sealed class ProjectileMover : MonoBehaviour
     private float remainingLifeSeconds;
 
     /// <summary>
-    /// 인스턴스 생성 직후 속도·수명을 덮어씁니다.
+    /// 인스턴스 생성 직후 속도·수명·데미지·팀 정보를 덮어씁니다.
     /// </summary>
-    /// <param name="speed">전진 속도.</param>
-    /// <param name="lifeTime">수명(초).</param>
     public void Initialize(float speed, float lifeTime, float damage, int shooterTeamId)
     {
         moveSpeedUnitsPerSecond = speed;
@@ -70,6 +68,16 @@ public sealed class ProjectileMover : MonoBehaviour
             return;
         }
 
+        /*
+         * EnemyTarget.ApplyDamage() 내부에서 사망 연출 중인지 확인합니다.
+         *
+         * - 일반 상태: 데미지 적용
+         * - 사망 연출 중: 데미지 무시
+         *
+         * Projectile은 적과 충돌한 것이므로 데미지 적용 여부와 관계없이 제거합니다.
+         * 사망 연출 중인 Enemy는 Collider도 비활성화되지만,
+         * 같은 프레임에 중복 충돌이 들어올 가능성을 대비한 안전 처리입니다.
+         */
         enemyTarget.ApplyDamage(damageAmount);
         Destroy(gameObject);
     }

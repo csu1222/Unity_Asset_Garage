@@ -1,10 +1,14 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class EnemyTarget : MonoBehaviour
 {
     private static readonly List<EnemyTarget> ActiveTargetsInternal = new List<EnemyTarget>(64);
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
 
     [SerializeField]
     [Tooltip("향후 진영 분리 확장을 위한 팀 식별자입니다.")]
@@ -15,21 +19,41 @@ public class EnemyTarget : MonoBehaviour
     private float maxHealth = 10f;
 
     [SerializeField]
-    [Tooltip("사망 위치 표시용 marker를 잠깐 남길지 여부입니다.")]
-    private bool showDeathMarker = true;
-
-    [SerializeField]
-    [Tooltip("사망 marker 유지 시간(초).")]
-    private float deathMarkerLifeTimeSeconds = 0.35f;
-
-    [SerializeField]
     [Tooltip("비워두면 transform.position을 조준점으로 사용합니다.")]
     private Transform aimPoint;
+
+    [Header("Death Reaction")]
+    [SerializeField]
+    [Tooltip("사망 연출 중 색상을 변경할 Renderer 목록입니다. 비워두면 자식 Renderer를 자동으로 찾습니다.")]
+    private Renderer[] reactionRenderers;
+
+    [SerializeField]
+    [Tooltip("사망 연출 중 Enemy에 적용할 색상입니다.")]
+    private Color deathReactionColor = Color.red;
 
     private float currentHealth;
 
     /*
-     * 수정점:
+     * EnemySpawner의 Inspector에서 설정한 피격/사망 연출 시간을 Initialize()를 통해 전달받습니다.
+     * 기본값은 요구사항에 맞춰 0.3초입니다.
+     */
+    private float deathReactionDurationSeconds = 0.3f;
+
+    /*
+     * 사망 연출 중에는 피격 판정을 막아야 하므로 별도 플래그를 둡니다.
+     *
+     * isDamageLocked == true
+     * - ApplyDamage()가 false를 반환합니다.
+     * - Collider도 꺼서 Projectile 충돌 자체가 들어오지 않도록 합니다.
+     */
+    private bool isDamageLocked;
+
+    /*
+     * Die()가 여러 번 호출되어 코루틴이 중복 실행되는 것을 막기 위한 플래그입니다.
+     */
+    private bool isDeathReactionPlaying;
+
+    /*
      * Enemy가 죽었을 때 Destroy(gameObject)를 호출하지 않고,
      * EnemySpawner가 가진 ObjectPool로 반환하기 위한 콜백입니다.
      *
@@ -39,7 +63,6 @@ public class EnemyTarget : MonoBehaviour
     private Action<EnemyTarget> releaseToPool;
 
     /*
-     * 수정점:
      * 중복 반환 방지용 플래그입니다.
      *
      * 예를 들어,
@@ -52,6 +75,25 @@ public class EnemyTarget : MonoBehaviour
      */
     private bool isReleased;
 
+    private Coroutine deathReactionCoroutine;
+
+    /*
+     * 사망 연출 동안 이동을 멈추기 위해 EnemyMove를 캐싱합니다.
+     */
+    private EnemyMove cachedEnemyMove;
+
+    /*
+     * 사망 연출 동안 피격 판정을 비활성화하기 위해 Collider들을 캐싱합니다.
+     */
+    private Collider[] cachedColliders;
+
+    /*
+     * 사망 연출 후 원래 색상으로 돌리기 위해 Renderer별 원본 색상을 저장합니다.
+     */
+    private Color[] originalRendererColors;
+
+    private int[] rendererColorPropertyIds;
+
     public static IReadOnlyList<EnemyTarget> ActiveTargets => ActiveTargetsInternal;
 
     public int TeamId => teamId;
@@ -61,6 +103,12 @@ public class EnemyTarget : MonoBehaviour
     public Transform CachedTransform => transform;
 
     public Vector3 AimWorldPosition => aimPoint != null ? aimPoint.position : transform.position;
+
+    private void Awake()
+    {
+        CacheComponents();
+        CacheOriginalRendererColors();
+    }
 
     private void OnEnable()
     {
@@ -88,6 +136,20 @@ public class EnemyTarget : MonoBehaviour
          * Enemy가 Pool로 반환되어 비활성화되면 활성 타겟 목록에서 제거합니다.
          */
         ActiveTargetsInternal.Remove(this);
+
+        /*
+         * 변경점:
+         * Pool로 반환될 때 붉은색이나 비활성화된 Collider 상태가 남지 않도록 복구합니다.
+         */
+        if (deathReactionCoroutine != null)
+        {
+            StopCoroutine(deathReactionCoroutine);
+            deathReactionCoroutine = null;
+        }
+
+        RestoreOriginalRendererColors();
+        SetCollidersEnabled(true);
+        SetMovementEnabled(true);
     }
 
     /*
@@ -103,26 +165,26 @@ public class EnemyTarget : MonoBehaviour
      * - 체력 초기화
      * - 중복 반환 플래그 초기화
      * - Pool 반환 콜백 저장
+     * - 피격/사망 연출 시간 저장
+     * - 사망 연출 관련 상태 복구
      * - 초기화 완료 후 SetActive(true)
      */
     public void Initialize(
         Vector3 spawnPosition,
         Quaternion spawnRotation,
         Transform root,
-        Action<EnemyTarget> releaseCallback)
+        Action<EnemyTarget> releaseCallback,
+        float deathReactionDuration)
     {
-        /*
-         * 수정점:
-         * Pool로 돌아갈 때 호출할 함수를 EnemySpawner로부터 받아 저장합니다.
-         */
         releaseToPool = releaseCallback;
+
+        deathReactionDurationSeconds = Mathf.Max(0f, deathReactionDuration);
 
         /*
          * 수정점:
          * Pool에서 재사용될 때 이전 상태가 남아 있으면 안 되므로 초기화합니다.
          */
-        isReleased = false;
-        currentHealth = maxHealth;
+        ResetRuntimeState();
 
         /*
          * 설명:
@@ -150,6 +212,24 @@ public class EnemyTarget : MonoBehaviour
         gameObject.SetActive(true);
     }
 
+    private void ResetRuntimeState()
+    {
+        isReleased = false;
+        isDamageLocked = false;
+        isDeathReactionPlaying = false;
+        currentHealth = maxHealth;
+
+        if (deathReactionCoroutine != null)
+        {
+            StopCoroutine(deathReactionCoroutine);
+            deathReactionCoroutine = null;
+        }
+
+        RestoreOriginalRendererColors();
+        SetCollidersEnabled(true);
+        SetMovementEnabled(true);
+    }
+
     public bool ApplyDamage(float damageAmount)
     {
         /*
@@ -157,6 +237,15 @@ public class EnemyTarget : MonoBehaviour
          * 이미 Pool로 반환 처리된 Enemy라면 데미지를 받지 않습니다.
          */
         if (isReleased)
+        {
+            return false;
+        }
+
+        /*
+         * 변경점:
+         * 사망 연출 중에는 붉은색 상태이며 피격 판정이 비활성화되어야 합니다.
+         */
+        if (isDamageLocked)
         {
             return false;
         }
@@ -178,26 +267,67 @@ public class EnemyTarget : MonoBehaviour
 
     private void Die()
     {
-        if (isReleased)
+        if (isReleased || isDeathReactionPlaying)
         {
             return;
         }
 
-        if (showDeathMarker)
+        /*
+         * 기존 CreateDeathMarker() 호출을 제거했습니다.
+         *
+         * 기존 방식:
+         * - 사망 위치에 새 Sphere 생성
+         *
+         * 변경 방식:
+         * - Enemy 자신이 제자리에 멈춤
+         * - Enemy 색상을 붉은색으로 변경
+         * - 붉은색 상태 동안 피격 판정 비활성화
+         * - deathReactionDurationSeconds 이후 Pool로 반환
+         */
+        deathReactionCoroutine = StartCoroutine(DeathReactionRoutine());
+    }
+
+    private IEnumerator DeathReactionRoutine()
+    {
+        isDeathReactionPlaying = true;
+        isDamageLocked = true;
+
+        /*
+         * 죽은 Enemy가 더 이상 터렛의 타겟 후보로 잡히지 않도록 ActiveTargets에서 제거합니다.
+         * OnDisable에서도 Remove를 다시 호출하지만, List.Remove는 없어도 안전합니다.
+         */
+        ActiveTargetsInternal.Remove(this);
+
+        /*
+         * Enemy를 제자리에 멈춥니다.
+         */
+        SetMovementEnabled(false);
+        StopRigidbodyMotion();
+
+        /*
+         * 붉은색 상태 동안 Projectile과의 피격 판정을 비활성화합니다.
+         */
+        SetCollidersEnabled(false);
+
+        /*
+         * 사망 위치에 새 Sphere를 만들지 않고, Enemy 자신의 색상을 변경합니다.
+         */
+        ApplyDeathReactionColor();
+
+        if (deathReactionDurationSeconds > 0f)
         {
-            CreateDeathMarker();
+            yield return new WaitForSeconds(deathReactionDurationSeconds);
         }
 
         /*
-         * 수정점:
-         * 기존 코드에서는 Destroy(gameObject)를 호출했습니다.
-         * ObjectPool 구조에서는 Destroy하지 않고 Pool로 반환해야 합니다.
+         * 연출 시간이 끝난 뒤 Pool로 반환합니다.
+         * 실제 비활성화는 EnemySpawner.ReleaseEnemyToPool()에서 처리합니다.
          */
+        deathReactionCoroutine = null;
         ReleaseToPool();
     }
 
     /*
-     * 수정점:
      * EnemyMove에서도 호출할 수 있도록 public 메서드로 둡니다.
      *
      * 사용 예:
@@ -217,7 +347,6 @@ public class EnemyTarget : MonoBehaviour
         if (releaseToPool != null)
         {
             /*
-             * 설명:
              * 실제 Pool 반환은 EnemySpawner가 담당합니다.
              * EnemyTarget은 직접 enemyPool.Release(this)를 호출하지 않습니다.
              */
@@ -226,7 +355,6 @@ public class EnemyTarget : MonoBehaviour
         else
         {
             /*
-             * 설명:
              * Pool 없이 단독 테스트할 경우를 위한 안전장치입니다.
              * 정상적인 ObjectPool 구조에서는 이 분기로 들어오지 않아야 합니다.
              */
@@ -234,30 +362,194 @@ public class EnemyTarget : MonoBehaviour
         }
     }
 
-    private void CreateDeathMarker()
+    private void CacheComponents()
     {
-        GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        marker.name = "EnemyDeathMarker";
-        marker.transform.position = AimWorldPosition;
-        marker.transform.localScale = Vector3.one * 0.45f;
+        cachedEnemyMove = GetComponent<EnemyMove>();
+        cachedColliders = GetComponentsInChildren<Collider>(includeInactive: true);
 
-        Collider markerCollider = marker.GetComponent<Collider>();
-        if (markerCollider != null)
+        if (reactionRenderers == null || reactionRenderers.Length == 0)
         {
-            Destroy(markerCollider);
+            reactionRenderers = GetComponentsInChildren<Renderer>(includeInactive: true);
+        }
+    }
+
+    private void CacheOriginalRendererColors()
+    {
+        if (reactionRenderers == null || reactionRenderers.Length == 0)
+        {
+            return;
         }
 
-        Renderer markerRenderer = marker.GetComponent<Renderer>();
-        if (markerRenderer != null)
+        originalRendererColors = new Color[reactionRenderers.Length];
+        rendererColorPropertyIds = new int[reactionRenderers.Length];
+
+        for (int index = 0; index < reactionRenderers.Length; index++)
         {
+            Renderer targetRenderer = reactionRenderers[index];
+
+            if (targetRenderer == null || targetRenderer.sharedMaterial == null)
+            {
+                originalRendererColors[index] = Color.white;
+                rendererColorPropertyIds[index] = ColorId;
+                continue;
+            }
+
+            Material sharedMaterial = targetRenderer.sharedMaterial;
+
             /*
-             * 설명:
-             * 사망 지점을 눈에 띄게 보여주기 위한 임시 색상입니다.
-             * 테스트용 시각 효과에 가깝습니다.
+             * URP Lit Shader는 보통 _BaseColor를 사용하고,
+             * Built-in Standard Shader는 보통 _Color를 사용합니다.
              */
-            markerRenderer.material.color = new Color(1f, 0.2f, 0.2f, 1f);
+            if (sharedMaterial.HasProperty(BaseColorId))
+            {
+                originalRendererColors[index] = sharedMaterial.GetColor(BaseColorId);
+                rendererColorPropertyIds[index] = BaseColorId;
+            }
+            else if (sharedMaterial.HasProperty(ColorId))
+            {
+                originalRendererColors[index] = sharedMaterial.GetColor(ColorId);
+                rendererColorPropertyIds[index] = ColorId;
+            }
+            else
+            {
+                originalRendererColors[index] = Color.white;
+                rendererColorPropertyIds[index] = ColorId;
+            }
+        }
+    }
+
+    private void ApplyDeathReactionColor()
+    {
+        if (reactionRenderers == null)
+        {
+            return;
         }
 
-        Destroy(marker, deathMarkerLifeTimeSeconds);
+        for (int index = 0; index < reactionRenderers.Length; index++)
+        {
+            Renderer targetRenderer = reactionRenderers[index];
+
+            if (targetRenderer == null)
+            {
+                continue;
+            }
+
+            Material targetMaterial = targetRenderer.material;
+            if (targetMaterial == null)
+            {
+                continue;
+            }
+
+            int propertyId = GetColorPropertyId(targetMaterial, index);
+            targetMaterial.SetColor(propertyId, deathReactionColor);
+        }
+    }
+
+    private void RestoreOriginalRendererColors()
+    {
+        if (reactionRenderers == null || originalRendererColors == null || rendererColorPropertyIds == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < reactionRenderers.Length; index++)
+        {
+            Renderer targetRenderer = reactionRenderers[index];
+
+            if (targetRenderer == null)
+            {
+                continue;
+            }
+
+            Material targetMaterial = targetRenderer.material;
+            if (targetMaterial == null)
+            {
+                continue;
+            }
+
+            int propertyId = rendererColorPropertyIds[index];
+
+            if (targetMaterial.HasProperty(propertyId))
+            {
+                targetMaterial.SetColor(propertyId, originalRendererColors[index]);
+            }
+        }
+    }
+
+    private int GetColorPropertyId(Material material, int rendererIndex)
+    {
+        if (material.HasProperty(BaseColorId))
+        {
+            return BaseColorId;
+        }
+
+        if (material.HasProperty(ColorId))
+        {
+            return ColorId;
+        }
+
+        if (rendererColorPropertyIds != null &&
+            rendererIndex >= 0 &&
+            rendererIndex < rendererColorPropertyIds.Length)
+        {
+            return rendererColorPropertyIds[rendererIndex];
+        }
+
+        return ColorId;
+    }
+
+    private void SetCollidersEnabled(bool enabled)
+    {
+        if (cachedColliders == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < cachedColliders.Length; index++)
+        {
+            Collider targetCollider = cachedColliders[index];
+
+            if (targetCollider == null)
+            {
+                continue;
+            }
+
+            targetCollider.enabled = enabled;
+        }
+    }
+
+    private void SetMovementEnabled(bool enabled)
+    {
+        if (cachedEnemyMove != null)
+        {
+            cachedEnemyMove.enabled = enabled;
+        }
+    }
+
+    private void StopRigidbodyMotion()
+    {
+        Rigidbody targetRigidbody = GetComponent<Rigidbody>();
+
+        if (targetRigidbody == null)
+        {
+            return;
+        }
+
+        /*
+         * Kinematic Rigidbody는 linearVelocity / angularVelocity 설정을 지원하지 않습니다.
+         *
+         * 현재 Enemy 이동은 EnemyMove를 비활성화해서 멈추고 있으므로,
+         * Rigidbody가 Kinematic이면 속도를 직접 건드릴 필요가 없습니다.
+         */
+        if (targetRigidbody.isKinematic)
+        {
+            return;
+        }
+
+        /*
+         * Non-Kinematic Rigidbody일 때만 물리 속도를 제거합니다.
+         */
+        targetRigidbody.linearVelocity = Vector3.zero;
+        targetRigidbody.angularVelocity = Vector3.zero;
     }
 }

@@ -1,9 +1,45 @@
 using System;
+using System.Collections;
 using UnityEngine;
-using static UnityEngine.Rendering.DebugUI;
+
+/*# 0508 
+# Turret 고쳤던,  +Pool  이어서 upgrade 
+# 코루틴을 사용해서 연출을 최소 3개 이상 만들어주세요 !
+여러분의 콘텐츠 IP 를 적용해주세요 ~ ~
+짝 이랑 동일 한것은 OK 
+프로젝트에 사용할 가능성을 고려해주세요.
+코루틴 -> 절차적 연출 
+EX) 즉발 총알 발사 →[ 반동 모션 + 쿨타임+발사 + 쿨타임 + 이펙트 On + 사운드 ]-> 절차 -> 코루틴으로 절차적으로 만들기 
+코루틴 호출 절차 묶음 3개 [  ] 
+
+# 완성된 GIF  + 적용한 코드 스크린샷 제출
+*/
+
+/*
+ 추가할 연출 
+    1. 터렛에 장탄수를 추가한 후 장탄수를 다 사용하면 재장전
+        - MissileLauncher 에서 장탄수 개념 추가, 재장전 시간 필드 추가 코루틴으로 재장전 타이머 동안 발사 금지
+
+    2. Enemy 피격시 0.5초 정지와 붉은 색으로 색 변화 그리고 그동안 피격 판정을 안받도록
+        - Enumy Prefab에서 피격모션 길이 필드 추가 피격시 변한 색상 추가, 코루틴으로 피격시 이동 멈춤과 Collider off, 피격모션 끝나면 다시 원상 복구
+
+    3. 터렛 격발시 포신 반동 모션
+        - TurretManager 에 포신 transform 필드 추가, 탄환 발사 속도에 비례해 Lerp 로 반동모션 시간 계산, 반동 크기 필드화, 반동 구현은 포신의 Local Position을 사용
+          반동은 발사 시간으로 제어하지만 또 bool로 체크를 해 다음 발사 가능 여부 판별
+ */
 
 public class TurretManager : MonoBehaviour
 {
+    // ================================
+    // 추가: 터렛 상태
+    // ================================
+    public enum TurretState
+    {
+        Aiming = 0,    // 타겟을 찾았지만 아직 발사 조건을 만족하지 못한 상태
+        FireReady = 1, // 조준, 탄환, 발사 간격 조건을 모두 만족해서 발사 가능한 상태
+        Reloading = 2  // 탄환을 모두 사용해서 재장전 코루틴이 진행 중인 상태
+    }
+
     // ================================
     // 추가: 타겟 선택 정책
     // ================================
@@ -20,6 +56,14 @@ public class TurretManager : MonoBehaviour
     [SerializeField] private MissileLaunch turretHead;
     [SerializeField] private CheckAiming aimChecker;
 
+    /*
+     * 변경점:
+     * 포신 반동 연출은 별도 컴포넌트인 BarrelRecoil이 담당합니다.
+     * TurretManager는 발사 성공 시점에 PlayRecoil()만 호출하고,
+     * Inspector 설정값을 BarrelRecoil에 전달합니다.
+     */
+    [SerializeField] private BarrelRecoil barrelRecoil;
+
     [Header("YawRotate Controller")]
     [SerializeField] private float yawSpeed = 180f;
     [SerializeField] private float yawStopAngle = 1f;
@@ -34,10 +78,17 @@ public class TurretManager : MonoBehaviour
     [SerializeField] private float projectileSpeed = 12f;
     [SerializeField] private float fireInterval = 0.5f;
     [SerializeField] private float projectileLifeTime = 3f;
+    [SerializeField] private int maxMagazine = 10;
+    [SerializeField] private float reloadTime = 2f;
+
+    [Header("Barrel Recoil Controller")]
+    [SerializeField]
+    [Min(0f)]
+    [Tooltip("포신이 발사 시 로컬 Z축 음수 방향으로 밀리는 거리입니다.")]
+    private float recoilDistance = 0.3f;
 
     [Header("CheckAiming Controller")]
     [SerializeField] private float fireAngleThreshold = 5f;
-
 
     // ================================
     // 추가: 타겟 선택 관련 설정
@@ -58,6 +109,10 @@ public class TurretManager : MonoBehaviour
     [Tooltip("타겟을 다시 찾는 주기입니다. 너무 낮으면 매 프레임 타겟을 다시 검사합니다.")]
     private float targetRefreshInterval = 0.1f;
 
+    [Header("State Debug")]
+    [SerializeField] private TurretState currentState = TurretState.Aiming;
+    [SerializeField] private float nextFireTime = 0f;
+
     // 추가: 현재 선택된 타겟
     private Transform currentTarget;
 
@@ -67,72 +122,294 @@ public class TurretManager : MonoBehaviour
     // 추가: 같은 타겟을 매 프레임 다시 적용하지 않기 위한 캐시
     private Transform lastAppliedTarget;
 
-    // 추가: 외부에서 현재 타겟을 확인할 수 있게 하는 읽기 전용 프로퍼티
+    // 추가: 재장전 코루틴 참조
+    private Coroutine reloadCoroutine;
+
+    // 추가: 외부에서 현재 타겟과 상태를 확인할 수 있게 하는 읽기 전용 프로퍼티
     public Transform CurrentTarget => currentTarget;
+    public TurretState CurrentState => currentState;
+
+    public event Action<TurretState> OnTurretStateChanged;
 
     private void Awake()
     {
         ResolveReference();
+        ClampInspectorValues();
+
+        /*
+         * 변경점:
+         * OnValidate는 에디터에서 값이 바뀔 때 주로 호출됩니다.
+         * 게임 실행 시점에도 Manager의 Inspector 값을 실제 컨트롤러들에게 전달하기 위해
+         * Awake에서 한 번 더 적용합니다.
+         */
+        ApplyControllerSettings(refillAmmo: true);
+    }
+
+    private void OnEnable()
+    {
+        /*
+         * 변경점:
+         * 터렛 Enable 시점의 초기화는 TurretManager가 담당합니다.
+         * 현재 탄환을 최대 장탄수로 채우고, 상태를 조준중으로 되돌립니다.
+         */
+        StopReloadCoroutine();
+
+        if (turretHead != null)
+        {
+            turretHead.RefillAmmo();
+        }
+
+        nextFireTime = 0f;
+        SetState(TurretState.Aiming);
+    }
+
+    private void OnDisable()
+    {
+        StopReloadCoroutine();
+        SetState(TurretState.Aiming);
     }
 
     // ================================
-    // 추가: 런타임 중 타겟 갱신
+    // 추가: 런타임 중 타겟 갱신 + 상태 갱신
     // ================================
     private void Update()
     {
         UpdateTargetSelection();
+        UpdateTurretState();
+        FireWhenReady();
     }
-
 
     private void OnValidate()
     {
-        // Yaw Controller
-        if (turretHeadYawPivot == null)
-            return;
+        ClampInspectorValues();
+        ApplyControllerSettings(refillAmmo: false);
+    }
 
-        yawSpeed = Mathf.Max(0, yawSpeed);
-        yawStopAngle = Mathf.Max(0, yawStopAngle);
+    private void ClampInspectorValues()
+    {
+        yawSpeed = Mathf.Max(0f, yawSpeed);
+        yawStopAngle = Mathf.Max(0f, yawStopAngle);
 
-        ChangeYawSpeed(yawSpeed);
-        ChangeYawStopAngle(yawStopAngle);
+        minPitch = Mathf.Clamp(minPitch, -90f, 90f);
+        maxPitch = Mathf.Clamp(maxPitch, -90f, 90f);
+        pitchSpeed = Mathf.Max(0f, pitchSpeed);
+        pitchStopAngle = Mathf.Max(0f, pitchStopAngle);
 
-        // Pitch Controller
-        if (turretBarrelPitchPivot == null)
-            return;
+        projectileSpeed = Mathf.Max(0f, projectileSpeed);
+        fireInterval = Mathf.Max(0f, fireInterval);
+        projectileLifeTime = Mathf.Max(0f, projectileLifeTime);
 
-        minPitch = Mathf.Max(-90f, minPitch);
-        maxPitch = Mathf.Max(-90f, maxPitch);
-        pitchSpeed = Mathf.Max(0, pitchSpeed);
-        pitchStopAngle = Mathf.Max(0, pitchStopAngle);
+        maxMagazine = Mathf.Max(1, maxMagazine);
+        reloadTime = Mathf.Max(0f, reloadTime);
 
-        ChangeMinPitch(minPitch);
-        ChangeMaxPitch(maxPitch);
-        ChangePitchSpeed(pitchSpeed);
-        ChangePitchStopAngle(pitchStopAngle);
+        recoilDistance = Mathf.Max(0f, recoilDistance);
 
-        // Launch Controller
-        if (turretHead == null)
-            return;
+        fireAngleThreshold = Mathf.Max(0f, fireAngleThreshold);
 
-        projectileSpeed = Mathf.Max(0, projectileSpeed);
-        fireInterval = Mathf.Max(0, fireInterval);
-        projectileLifeTime = Mathf.Max(0, projectileLifeTime);
-
-        ChangeProjectileSpeed(projectileSpeed);
-        ChangeFireInterval(fireInterval);
-        ChangeProjectileLifeTime(projectileLifeTime);
-
-        // CheckAiming
-        if (aimChecker == null)
-            return;
-
-        fireAngleThreshold = Mathf.Max(0, fireAngleThreshold);
-
-        ChangeFireAngleThreshold(fireAngleThreshold);
-
-        // 추가: 타겟 관련 값 보정
         targetSearchRange = Mathf.Max(0f, targetSearchRange);
         targetRefreshInterval = Mathf.Max(0.02f, targetRefreshInterval);
+    }
+
+    private void ApplyControllerSettings(bool refillAmmo)
+    {
+        if (turretHeadYawPivot != null)
+        {
+            ChangeYawSpeed(yawSpeed);
+            ChangeYawStopAngle(yawStopAngle);
+        }
+
+        if (turretBarrelPitchPivot != null)
+        {
+            ChangeMinPitch(minPitch);
+            ChangeMaxPitch(maxPitch);
+            ChangePitchSpeed(pitchSpeed);
+            ChangePitchStopAngle(pitchStopAngle);
+        }
+
+        if (turretHead != null)
+        {
+            ChangeProjectileSpeed(projectileSpeed);
+            ChangeFireInterval(fireInterval);
+            ChangeProjectileLifeTime(projectileLifeTime);
+            ChangeMaxMagazine(maxMagazine, refillAmmo);
+            ChangeReloadTime(reloadTime);
+        }
+
+        if (aimChecker != null)
+        {
+            ChangeFireAngleThreshold(fireAngleThreshold);
+        }
+
+        if (barrelRecoil != null)
+        {
+            /*
+             * 변경점:
+             * TurretManager의 Inspector에서 recoilDistance를 수정하면
+             * ApplyControllerSettings()를 통해 BarrelRecoil에 즉시 반영됩니다.
+             *
+             * 반동 전체 시간은 MissileLaunch.FireInterval 값을 기준으로 동기화합니다.
+             */
+            ChangeRecoilDistance(recoilDistance);
+            ChangeRecoilDuration(turretHead != null ? turretHead.FireInterval : fireInterval);
+        }
+    }
+
+    // ================================
+    // 추가: enum 기반 터렛 상태 갱신
+    // ================================
+    private void UpdateTurretState()
+    {
+        /*
+         * 변경점:
+         * 재장전 상태는 코루틴이 끝날 때까지 유지합니다.
+         * 이전 구조처럼 isReloading bool을 직접 보지 않고 currentState로 판별합니다.
+         */
+        if (currentState == TurretState.Reloading)
+            return;
+
+        if (turretHead == null)
+        {
+            SetState(TurretState.Aiming);
+            return;
+        }
+
+        if (turretHead.HasAmmo == false)
+        {
+            BeginReload();
+            return;
+        }
+
+        /*
+         * CheckAiming은 상태머신이 아니라 조준 완료 여부를 계산하는 입력 역할만 합니다.
+         * 실제 상태 결정은 TurretManager가 담당합니다.
+         */
+        bool isAimComplete = aimChecker != null && aimChecker.CanFire;
+
+        if (isAimComplete == false)
+        {
+            SetState(TurretState.Aiming);
+            return;
+        }
+
+        if (Time.time < nextFireTime)
+        {
+            SetState(TurretState.Aiming);
+            return;
+        }
+
+        SetState(TurretState.FireReady);
+    }
+
+    private void FireWhenReady()
+    {
+        if (currentState != TurretState.FireReady)
+            return;
+
+        if (turretHead == null)
+        {
+            SetState(TurretState.Aiming);
+            return;
+        }
+
+        bool launchSucceeded = turretHead.TryLaunch();
+
+        if (launchSucceeded == false)
+        {
+            SetState(TurretState.Aiming);
+            return;
+        }
+
+        /*
+         * 변경점:
+         * 발사체 생성이 성공한 직후 포신 반동 연출을 실행합니다.
+         * 반동 시간은 MissileLaunch.FireInterval을 사용합니다.
+         */
+        PlayBarrelRecoil();
+
+        nextFireTime = Time.time + turretHead.FireInterval;
+
+        if (turretHead.HasAmmo == false)
+        {
+            BeginReload();
+            return;
+        }
+
+        /*
+         * 발사 직후에는 fireInterval이 지나기 전까지 다시 발사하면 안 됩니다.
+         * 별도의 Cooldown 상태를 만들지 않는 조건이므로, 이 시간은 Aiming 상태로 처리합니다.
+         */
+        SetState(TurretState.Aiming);
+    }
+
+    private void BeginReload()
+    {
+        if (currentState == TurretState.Reloading)
+            return;
+
+        if (reloadCoroutine != null)
+            return;
+
+        SetState(TurretState.Reloading);
+        reloadCoroutine = StartCoroutine(ReloadRoutine());
+    }
+
+    private IEnumerator ReloadRoutine()
+    {
+        float waitTime = turretHead != null ? turretHead.ReloadTime : reloadTime;
+
+        if (waitTime > 0f)
+        {
+            yield return new WaitForSeconds(waitTime);
+        }
+
+        if (turretHead != null)
+        {
+            turretHead.RefillAmmo();
+        }
+
+        reloadCoroutine = null;
+        nextFireTime = Time.time;
+
+        /*
+         * 재장전이 끝난 직후에도 즉시 FireReady로 바꾸지 않습니다.
+         * 다음 Update에서 CheckAiming.CanFire, 탄환, 발사 간격을 다시 평가해서 상태를 결정합니다.
+         */
+        SetState(TurretState.Aiming);
+    }
+
+    private void StopReloadCoroutine()
+    {
+        if (reloadCoroutine != null)
+        {
+            StopCoroutine(reloadCoroutine);
+            reloadCoroutine = null;
+        }
+    }
+
+
+    private void PlayBarrelRecoil()
+    {
+        if (barrelRecoil == null || turretHead == null)
+        {
+            return;
+        }
+
+        /*
+         * 변경점:
+         * 반동이 동작하는 시간은 MissileLaunch.FireInterval 값을 사용합니다.
+         * fireInterval을 런타임에 바꿔도 발사 시점마다 최신 값을 적용합니다.
+         */
+        barrelRecoil.SetRecoilDuration(turretHead.FireInterval);
+        barrelRecoil.PlayRecoil();
+    }
+
+    private void SetState(TurretState newState)
+    {
+        if (currentState == newState)
+            return;
+
+        currentState = newState;
+        OnTurretStateChanged?.Invoke(currentState);
     }
 
     // ================================
@@ -344,61 +621,129 @@ public class TurretManager : MonoBehaviour
         {
             aimChecker.SetTarget(currentTarget);
         }
-
-        // MissileLaunch는 SetTarget을 호출하지 않습니다.
-        // 이유:
-        // MissileLaunch는 직접 타겟을 추적하지 않고,
-        // CheckAiming.CanFire 값과 muzzle의 위치/회전만 사용해서 발사합니다.
     }
 
     public void ChangeYawSpeed(float value)
     {
-        turretHeadYawPivot.SetYawSpeed(value);
+        if (turretHeadYawPivot != null)
+        {
+            turretHeadYawPivot.SetYawSpeed(value);
+        }
     }
 
     public void ChangeYawStopAngle(float value)
     {
-        turretHeadYawPivot.SetYawStopAngle(value);
+        if (turretHeadYawPivot != null)
+        {
+            turretHeadYawPivot.SetYawStopAngle(value);
+        }
     }
 
     public void ChangeMinPitch(float value)
     {
-        turretBarrelPitchPivot.SetMinPitch(value);
+        if (turretBarrelPitchPivot != null)
+        {
+            turretBarrelPitchPivot.SetMinPitch(value);
+        }
     }
 
     public void ChangeMaxPitch(float value)
     {
-        turretBarrelPitchPivot.SetMaxPitch(value);
+        if (turretBarrelPitchPivot != null)
+        {
+            turretBarrelPitchPivot.SetMaxPitch(value);
+        }
     }
 
     public void ChangePitchSpeed(float value)
     {
-        turretBarrelPitchPivot.SetPitchSpeed(value);
+        if (turretBarrelPitchPivot != null)
+        {
+            turretBarrelPitchPivot.SetPitchSpeed(value);
+        }
     }
 
     public void ChangePitchStopAngle(float value)
     {
-        turretBarrelPitchPivot.SetPitchStopAngle(value);
+        if (turretBarrelPitchPivot != null)
+        {
+            turretBarrelPitchPivot.SetPitchStopAngle(value);
+        }
     }
 
     public void ChangeProjectileSpeed(float value)
     {
-        turretHead.SetProjectileSpeed(value);
+        if (turretHead != null)
+        {
+            turretHead.SetProjectileSpeed(value);
+        }
     }
 
     public void ChangeFireInterval(float value)
     {
-        turretHead.SetFireInterval(value);
+        if (turretHead != null)
+        {
+            turretHead.SetFireInterval(value);
+        }
+
+        /*
+         * 변경점:
+         * 반동 시간은 MissileLaunch.FireInterval을 따라가야 하므로
+         * 발사 간격이 변경될 때 BarrelRecoil에도 최신 시간을 전달합니다.
+         */
+        if (barrelRecoil != null)
+        {
+            float recoilDuration = turretHead != null ? turretHead.FireInterval : value;
+            barrelRecoil.SetRecoilDuration(recoilDuration);
+        }
     }
 
     public void ChangeProjectileLifeTime(float value)
     {
-        turretHead.SetProjectileLifeTime(value);
+        if (turretHead != null)
+        {
+            turretHead.SetProjectileLifeTime(value);
+        }
+    }
+
+    public void ChangeMaxMagazine(int value, bool refillAmmo = false)
+    {
+        if (turretHead != null)
+        {
+            turretHead.SetMaxMagazine(value, refillAmmo);
+        }
+    }
+
+    public void ChangeReloadTime(float value)
+    {
+        if (turretHead != null)
+        {
+            turretHead.SetReloadTime(value);
+        }
     }
 
     public void ChangeFireAngleThreshold(float value)
     {
-        aimChecker.SetFireAngleThreshold(value);
+        if (aimChecker != null)
+        {
+            aimChecker.SetFireAngleThreshold(value);
+        }
+    }
+
+    public void ChangeRecoilDistance(float value)
+    {
+        if (barrelRecoil != null)
+        {
+            barrelRecoil.SetRecoilDistance(value);
+        }
+    }
+
+    public void ChangeRecoilDuration(float value)
+    {
+        if (barrelRecoil != null)
+        {
+            barrelRecoil.SetRecoilDuration(value);
+        }
     }
 
     private void ResolveReference()
@@ -410,7 +755,6 @@ public class TurretManager : MonoBehaviour
         if (turretHeadYawPivot == null)
         {
             Debug.LogWarning("[Turret Manager] Rotate Target Yaw 탐색 불가");
-            return;
         }
 
         if (turretBarrelPitchPivot == null)
@@ -420,7 +764,6 @@ public class TurretManager : MonoBehaviour
         if (turretBarrelPitchPivot == null)
         {
             Debug.LogWarning("[Turret Manager] Rotate Target Pitch 탐색 불가");
-            return;
         }
 
         if (turretHead == null)
@@ -430,7 +773,6 @@ public class TurretManager : MonoBehaviour
         if (turretHead == null)
         {
             Debug.LogWarning("[Turret Manager] Missile Launch 탐색 불가");
-            return;
         }
 
         if (aimChecker == null)
@@ -440,7 +782,11 @@ public class TurretManager : MonoBehaviour
         if (aimChecker == null)
         {
             Debug.LogWarning("[Turret Manager] Check Aiming 탐색 불가");
-            return;
+        }
+
+        if (barrelRecoil == null)
+        {
+            barrelRecoil = GetComponentInChildren<BarrelRecoil>();
         }
     }
 }

@@ -695,6 +695,7 @@ GameObject:
   - component: {fileID: 1407954721}
   - component: {fileID: 1407954720}
   - component: {fileID: 1407954722}
+  - component: {fileID: 1407954723}
   m_Layer: 0
   m_Name: Turret
   m_TagString: Untagged
@@ -734,6 +735,7 @@ MonoBehaviour:
   turretBarrelPitchPivot: {fileID: 1407954721}
   turretHead: {fileID: 1407954720}
   aimChecker: {fileID: 1407954722}
+  barrelRecoil: {fileID: 1407954723}
   yawSpeed: 180
   yawStopAngle: 1
   minPitch: -45
@@ -741,13 +743,18 @@ MonoBehaviour:
   pitchSpeed: 45
   pitchStopAngle: 1
   projectileSpeed: 12
-  fireInterval: 0.5
+  fireInterval: 0.2
   projectileLifeTime: 3
+  maxMagazine: 10
+  reloadTime: 2
+  recoilDistance: 0.3
   fireAngleThreshold: 5
   selectionPolicy: 0
   selfTeamId: -1
   targetSearchRange: 15
   targetRefreshInterval: 0.1
+  currentState: 0
+  nextFireTime: 0
 --- !u!114 &1407954719
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -779,18 +786,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MissileLaunch
   muzzle: {fileID: 2123404438}
-  checkAiming: {fileID: 1407954722}
   missilePrefab: {fileID: 359052364241322406, guid: ef142042c8eabb547b4db235d8a35c03, type: 3}
   projectileShape: 0
   projectileScale: 0.3
   usePrefab: 1
   projectileSpeed: 12
-  fireInterval: 0.5
+  fireInterval: 0.2
   projectileLifeTime: 3
+  maxMagazine: 10
+  currentAmmo: 10
+  reloadTime: 2
   projectileDamage: 10
   shooterTeamId: 0
-  canLaunch: 0
-  nextFireTime: 0
 --- !u!114 &1407954721
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -830,6 +837,52 @@ MonoBehaviour:
   signedYawAngle: 0
   signedPitchAngle: 0
   canFire: 0
+--- !u!114 &1407954723
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407954716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be8431760869c694aa99410238011fe5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BarrelRecoil
+  recoilTarget: {fileID: 325335662}
+  recoilDistance: 0.3
+  recoilDuration: 0.2
+--- !u!1 &1418853476
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1418853477}
+  m_Layer: 0
+  m_Name: EnemySpawnPool
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1418853477
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1418853476}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.2533, y: 0.55059, z: 0.32728}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1709261435
 GameObject:
   m_ObjectHideFlags: 0
@@ -971,15 +1024,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemySpawner
   enemyPrefab: {fileID: 4709950448012325657, guid: 43cc7e491f42c3042a1323b2530aedbe, type: 3}
-  enemyRoot: {fileID: 1709261439}
+  enemyRoot: {fileID: 1418853477}
   defaultCapacity: 10
   maxSize: 50
   initialSpawnCount: 4
   maxAliveCount: 8
   spawnIntervalSeconds: 1
   lookAtCenter: {fileID: 1098261258}
-  enemyMoveSpeedUnitsPerSecond: 5
-  enemyLifeTimeSeconds: 10
+  enemyMoveSpeedUnitsPerSecond: 3
+  enemyLifeTimeSeconds: 3
+  deathReactionDurationSeconds: 0.3
 --- !u!1 &1788323718
 GameObject:
   m_ObjectHideFlags: 0
@@ -1227,3 +1281,4 @@ SceneRoots:
   - {fileID: 1370591853}
   - {fileID: 1407954717}
   - {fileID: 1146881115}
+  - {fileID: 1418853477}
