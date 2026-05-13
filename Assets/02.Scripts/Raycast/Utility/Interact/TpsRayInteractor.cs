@@ -44,6 +44,7 @@ namespace SystemicOverload.Interaction
 
             if (inputProvider.WasInteractPressedThisFrame)
             {
+                Debug.Log("Input Interact");
                 currentTarget.Interact(gameObject);
             }
         }
@@ -64,6 +65,7 @@ namespace SystemicOverload.Interaction
             Ray centerRay = aimCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
             if (Physics.Raycast(centerRay, out RaycastHit raycastHit, interactDistance, interactMask, QueryTriggerInteraction.Ignore))
             {
+
                 if (drawDebugRay)
                 {
                     Debug.DrawRay(centerRay.origin, centerRay.direction * raycastHit.distance, Color.yellow);
@@ -72,11 +74,12 @@ namespace SystemicOverload.Interaction
                 currentTarget = raycastHit.collider.GetComponentInParent<IInteractable>();
                 if (currentTarget == null)
                 {
+                    Debug.Log("Interactable Is Null");
                     lastPrompt = string.Empty;
                     return;
                 }
 
-                string prompt = currentTarget.GetPrompt();
+                    string prompt = currentTarget.GetPrompt();
                 if (!string.IsNullOrEmpty(prompt) && prompt != lastPrompt)
                 {
                     Debug.Log(prompt);

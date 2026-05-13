@@ -11,6 +11,8 @@ namespace SystemicOverload.Phase1
     {
         private static readonly int SpeedId = Animator.StringToHash("Speed");
         private static readonly int IsGroundedId = Animator.StringToHash("IsGrounded");
+        private static readonly int InFight = Animator.StringToHash("InFight");
+        private static readonly int Punch = Animator.StringToHash("Punch");
 
         [SerializeField] private MovementComponent movementComponent;
         [SerializeField] private CharacterController characterController;
@@ -19,6 +21,8 @@ namespace SystemicOverload.Phase1
         private Animator animator;
         private bool hasSpeedParameter;
         private bool hasIsGroundedParameter;
+        private bool hasInFightParameter;
+        private bool hasPunchParameter;
 
         private void Awake()
         {
@@ -56,7 +60,18 @@ namespace SystemicOverload.Phase1
             {
                 animator.SetBool(IsGroundedId, characterController.isGrounded);
             }
+
+            if (hasInFightParameter && characterController != null)
+            {
+                animator.SetBool(InFight, characterController.isGrounded);
+            }
+
+            if (hasPunchParameter && characterController != null)
+            {
+                animator.SetBool(Punch, characterController.isGrounded);
+            }
         }
+
 
         /// <summary>
         /// 런타임에 존재하는 파라미터만 갱신해, 빈 Controller에도 안전하게 동작합니다.
@@ -65,6 +80,8 @@ namespace SystemicOverload.Phase1
         {
             hasSpeedParameter = false;
             hasIsGroundedParameter = false;
+            hasInFightParameter = false;
+            hasPunchParameter = false;
 
             if (animator == null)
             {
@@ -82,6 +99,17 @@ namespace SystemicOverload.Phase1
                 {
                     hasIsGroundedParameter = true;
                 }
+
+                if (parameter.type == AnimatorControllerParameterType.Bool && parameter.nameHash == InFight)
+                {
+                    hasInFightParameter = true;
+                }
+
+                if (parameter.type == AnimatorControllerParameterType.Bool && parameter.nameHash == Punch)
+                {
+                    hasPunchParameter = true;
+                }
+
             }
         }
     }

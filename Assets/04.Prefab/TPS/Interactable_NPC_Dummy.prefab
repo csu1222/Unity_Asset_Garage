@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1248868298097785159}
   - component: {fileID: 4642927255018345808}
   - component: {fileID: 1063598783231786667}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Interactable_NPC_Dummy
   m_TagString: Untagged
   m_Icon: {fileID: 0}

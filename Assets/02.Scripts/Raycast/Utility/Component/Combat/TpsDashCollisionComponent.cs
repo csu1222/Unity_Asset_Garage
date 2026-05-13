@@ -87,8 +87,22 @@ namespace SystemicOverload.Phase1
             {
                 return;
             }
+            Debug.Log(
+    $"[Dash] frame={Time.frameCount}, " +
+    $"dashDistance={dashDistance}, " +
+    $"moveDistance={moveDistance}, " +
+    $"direction={dashDirection}, " +
+    $"positionBefore={transform.position}",
+    this
+);
 
             characterController.Move(dashDirection * moveDistance);
+
+
+            Debug.Log(
+                $"[Dash] positionAfter={transform.position}",
+                this
+            );
         }
 
         private Vector3 ResolveDashDirection()

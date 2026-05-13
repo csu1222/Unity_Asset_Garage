@@ -15,6 +15,7 @@ namespace SystemicOverload.Combat
         [SerializeField] private float radius = 1.6f;
         [SerializeField] private float damage = 15.0f;
         [SerializeField] private float cooldown = 0.5f;
+        [SerializeField] private float fightTime = 2.0f;
         [SerializeField] private LayerMask enemyMask = ~0;
 
         private readonly HashSet<IDamageable> damagedTargets = new HashSet<IDamageable>();
@@ -32,6 +33,7 @@ namespace SystemicOverload.Combat
             radius = Mathf.Max(0.1f, radius);
             damage = Mathf.Max(0.0f, damage);
             cooldown = Mathf.Max(0.0f, cooldown);
+            fightTime = Mathf.Max(0.0f, fightTime);
         }
 
         private void Update()
