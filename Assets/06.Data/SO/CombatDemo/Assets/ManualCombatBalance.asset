@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e14ca7c1f6ef8384da49a6ad41de318b, type: 3}
+  m_Name: ManualCombatBalance
+  m_EditorClassIdentifier: Assembly-CSharp::AssetGarage.CombatDemo.ManualCombatBalanceConfig
+  ReadyTime: 0.5
+  DecisionDuration: 1.5
+  GreatStart: 0.85
+  ExtremeStart: 0.925
+  GreatMultiplier: 1.5
+  ExtremeMultiplier: 3
+  DefenseScale: 100
+  PressureThreshold: 3
+  EnemyPressureMultiplier: 1.5
+  MaxTurn: 10
+  AttackWeight: 1
+  DefenseWeight: 1
+  RecoveryWeight: 1
