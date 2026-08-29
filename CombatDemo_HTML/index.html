@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CombatDemo v0.4 플레이테스트</title>
+  <meta name="description" content="전투, 타이밍, 장비와 Encounter Queue를 실험하는 로컬 플레이테스트 도구">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app" class="app-shell">
+    <header class="topbar">
+      <div><span class="eyebrow">HTML PLAYTEST / v0.4</span><h1>용병단 전투 관제</h1></div>
+      <div class="top-actions"><span id="condition-badge" class="badge">정상</span><button id="equipment-toggle" class="ghost-button">장비</button><button id="log-toggle" class="ghost-button">전투 기록</button><button id="debug-toggle" class="accent-button">디버그 <kbd>F1</kbd></button></div>
+    </header>
+
+    <section class="combat-grid">
+      <aside class="queue-panel panel">
+        <div class="panel-heading"><div><span class="eyebrow">COMBAT INBOX</span><h2>전투 알림 <b id="queue-count">0</b></h2></div><button id="spawn-quick" class="icon-button" title="랜덤 Encounter 생성">＋</button></div>
+        <div id="queue-list" class="queue-list"></div>
+      </aside>
+
+      <section class="arena panel">
+        <div class="arena-glow"></div>
+        <div class="enemy-zone">
+          <div class="enemy-card"><div class="enemy-title"><span id="enemy-name">도적 습격대</span><span id="enemy-threat" class="threat">높음</span></div><div class="bar"><i id="enemy-hp-bar"></i></div><small id="enemy-hp">100 / 100</small></div>
+          <div id="enemy-silhouette" class="enemy-silhouette"><span></span></div>
+        </div>
+        <div class="intent"><span>다음 행동</span><strong id="enemy-intent">대기 중</strong><em id="empower-label"></em></div>
+
+        <div id="timing-stage" class="timing-stage">
+          <div class="timing-header"><span id="timing-view-name">선형 타이밍</span><span id="timing-clock">1.5초</span></div>
+          <div id="timing-linear" class="timing-view linear-view"><div class="track"><i class="zone great"></i><i class="zone extreme"></i><b class="cursor"></b></div></div>
+          <div id="timing-circle" class="timing-view circle-view hidden"><div class="target-rings"><i class="ring great"></i><i class="ring extreme"></i><b class="closing-ring"></b></div></div>
+          <div id="timing-radial" class="timing-view radial-view hidden"><svg viewBox="0 0 240 240" aria-label="방사형 타이밍"><circle class="radial-track" cx="120" cy="120" r="88"></circle><circle class="radial-great" cx="120" cy="120" r="88"></circle><circle class="radial-extreme" cx="120" cy="120" r="88"></circle></svg><b class="radial-pin"></b></div>
+          <div id="grade-feedback" class="grade-feedback">행동을 선택하세요</div>
+        </div>
+
+        <div class="mercenaries">
+          <article data-role="attack" class="mercenary attack"><div class="portrait"><span></span></div><b>공격 용병</b><small id="attack-equipment">안정형 검</small></article>
+          <article data-role="defense" class="mercenary defense"><div class="portrait"><span></span></div><b>방어 용병</b><small id="defense-equipment">수호 방패</small></article>
+          <article data-role="recovery" class="mercenary recovery"><div class="portrait"><span></span></div><b>회복 용병</b><small id="recovery-equipment">야전 치료 키트</small></article>
+        </div>
+      </section>
+
+      <aside class="status-column">
+        <section class="panel status-card"><span class="eyebrow">PLAYER STATUS</span><h2>용병단</h2><label>전투 HP <b id="player-hp">100 / 100</b></label><div class="bar player"><i id="player-hp-bar"></i></div><label>컨디션 <b id="condition-value">10 / 10</b></label><div class="bar condition"><i id="condition-bar"></i></div></section>
+        <section class="panel rps-card"><span class="eyebrow">SOFT–RPS</span><div class="rps-triangle"><b data-action="attack">공격</b><b data-action="defense">방어</b><b data-action="recovery">회복</b><svg viewBox="0 0 220 150"><path d="M110 24 L35 122"></path><path d="M38 127 L182 127"></path><path d="M186 122 L116 24"></path></svg></div><p id="affinity-preview">적 의도를 확인하세요</p></section>
+        <section class="panel tempo-card"><div><span>턴</span><b id="turn-value">1 / 5</b></div><div><span>압박</span><b id="pressure-value">0 / 3</b></div><div id="pressure-dots" class="pressure-dots"></div><p id="pressure-warning">안정</p></section>
+      </aside>
+    </section>
+
+    <nav class="action-bar" aria-label="전투 행동">
+      <button data-command="attack" class="action attack"><kbd>Q</kbd><span><b>공격</b><small>피해를 가합니다</small></span></button>
+      <button data-command="defense" class="action defense"><kbd>W</kbd><span><b>방어</b><small>방어하고 반격합니다</small></span></button>
+      <button data-command="recovery" class="action recovery"><kbd>E</kbd><span><b>회복</b><small>회복하고 압박이 오릅니다</small></span></button>
+    </nav>
+  </main>
+
+  <div id="resolution-modal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card"><span class="eyebrow">RESOLUTION REQUIRED</span><h2 id="modal-title">도적 습격</h2><div id="modal-details" class="modal-details"></div><div class="selection-timer"><i id="selection-bar"></i></div><p>선택까지 <b id="selection-time">5.0초</b></p><div class="resolution-actions"><button data-resolution="manual"><kbd>Q</kbd> 직접 전투</button><button data-resolution="auto"><kbd>W</kbd> 자동 전투</button><button data-resolution="negotiation"><kbd>E</kbd> 협상</button><button data-resolution="escape"><kbd>R</kbd> 도주</button></div></div></div>
+  <div id="gameover-modal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card gameover-card"><span class="eyebrow">PLAYTEST ENDED</span><h2>용병단 전투 불능</h2><p>컨디션이 0이 되어 이번 테스트가 종료되었습니다.</p><p>전체 초기화 후 새로운 Encounter부터 다시 테스트할 수 있습니다.</p><button id="reset-playtest" class="accent-button">컨디션 회복 후 다시 테스트</button></div></div>
+  <aside id="equipment-drawer" class="drawer left hidden"><div class="drawer-head"><div><span class="eyebrow">LOADOUT</span><h2>용병 장비</h2></div><button data-close="equipment">×</button></div><div id="equipment-content"></div></aside>
+  <aside id="log-drawer" class="drawer right hidden"><div class="drawer-head"><div><span class="eyebrow">LEDGER</span><h2>전투 기록</h2></div><button data-close="log">×</button></div><div id="log-content"></div></aside>
+  <aside id="debug-drawer" class="drawer right debug hidden"><div class="drawer-head"><div><span class="eyebrow">RUNTIME CONTROLS</span><h2>디버그</h2></div><button data-close="debug">×</button></div><div id="debug-content"></div></aside>
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <script src="js/config.js"></script><script src="js/random.js"></script><script src="js/equipment.js"></script><script src="js/timing.js"></script><script src="js/combat.js"></script><script src="js/resolution.js"></script><script src="js/queue.js"></script><script src="js/ui.js"></script><script src="js/app.js"></script>
+</body>
+</html>
